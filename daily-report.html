@@ -4,213 +4,247 @@
     <title>NRV Denim - Daily Stock Report</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f4f8; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f4f8; color: #2c3e50; }
         
-        /* Container and Layout */
         .container { 
             background: white; 
-            padding: 20px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); 
             max-width: 98%; 
-            margin: 20px auto; 
+            margin: 10px auto; 
         }
 
-        h2 { color: #2c3e50; border-left: 5px solid #2196f3; padding-left: 15px; margin-bottom: 20px; font-size: 22px; }
-        
-        /* Controls */
-        .controls-row {
+        .header-section { text-align: center; margin-bottom: 15px; }
+        .company-name { margin: 0; font-size: 24px; font-weight: bold; }
+        .report-title { color: #1565c0; font-weight: bold; margin: 5px 0; letter-spacing: 2px; font-size: 14px; }
+
+        /* Controls Section */
+        .controls {
             display: flex; 
             justify-content: space-between; 
             align-items: flex-end; 
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             gap: 10px;
-            flex-wrap: wrap;
         }
-
         .form-group { display: flex; flex-direction: column; }
-        label { font-size: 11px; font-weight: bold; color: #636e72; margin-bottom: 5px; text-transform: uppercase; }
-        input[type="month"] { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; }
+        label { font-size: 10px; font-weight: bold; color: #636e72; margin-bottom: 3px; text-transform: uppercase; }
+        input[type="month"] { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; width: 160px; }
 
         /* Buttons */
-        .button-group { display: flex; gap: 8px; }
+        .btn-group { display: flex; gap: 8px; }
         .action-btn { 
-            padding: 10px 18px; 
+            padding: 8px 16px; 
             border: none; 
-            border-radius: 6px; 
+            border-radius: 4px; 
             cursor: pointer; 
             font-weight: bold; 
-            font-size: 13px; 
+            font-size: 12px; 
             color: white; 
-            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         .btn-refresh { background: #3498db; }
-        .btn-excel { background: #1d6f42; }
+        .btn-excel { background: #27ae60; }
         .btn-print { background: #2c3e50; }
         .action-btn:hover { opacity: 0.9; }
 
-        /* Table Styles */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-        th { background: #2c3e50; color: white; padding: 8px 4px; text-align: center; border: 1px solid #444; }
-        td { padding: 8px 4px; border: 1px solid #dee2e6; text-align: center; }
+        /* Table Styling */
+        .table-wrapper { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; table-layout: auto; }
+        th { background: #2c3e50; color: white; padding: 6px 2px; border: 1px solid #444; text-align: center; }
+        td { padding: 6px 2px; border: 1px solid #dee2e6; text-align: center; }
         tr:nth-child(even) { background-color: #f8f9fa; }
-        tr:hover { background-color: #f1f1f1; }
+        .cumulative-col { font-weight: bold; }
 
-        /* Print Specific Styling */
+        /* --- PRINT PREVIEW FIX (FIT TO PAGE) --- */
         @media print {
-            .action-btn, .form-group, label, .no-print { display: none !important; }
-            .container { box-shadow: none; margin: 0; width: 100%; max-width: 100%; }
-            body { background: white; }
-            table { font-size: 10px; }
+            @page { 
+                size: landscape; 
+                margin: 0.5cm; 
+            }
+            body { background: white; margin: 0; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100%; max-width: 100%; margin: 0; padding: 0; }
+            .controls, .btn-group, .no-print { display: none !important; }
+            
+            table { 
+                width: 100% !important; 
+                table-layout: fixed; /* Prevents table from expanding beyond page width */
+                font-size: 8pt !important; /* Reduces font size to fit all 17 columns */
+            }
+            th, td { 
+                word-wrap: break-word; 
+                padding: 4px 1px !important;
+                border: 0.5pt solid #000 !important;
+            }
+            /* Ensure colors and headers print properly */
+            th { -webkit-print-color-adjust: exact; background-color: #2c3e50 !important; color: white !important; }
+            .bg-raw { background-color: #27ae60 !important; }
+            .bg-iss { background-color: #e67e22 !important; }
+            .bg-prd { background-color: #8e44ad !important; }
+            .bg-rec { background-color: #f39c12 !important; }
+            .bg-stk-raw { background-color: #c0392b !important; }
+            .bg-stk-rec { background-color: #16a085 !important; }
         }
     </style>
 </head>
 <body onload="initReport()">
 
 <div class="container">
-    <div style="text-align: center; margin-bottom: 10px;">
-        <h1 style="margin: 0; color: #1a252f; font-size: 28px;">NRV DENIM PRIVATE LIMITED</h1>
-        <p style="color: #1565c0; font-weight: bold; margin-top: 5px; letter-spacing: 2px;">DAILY WASTE & RECYCLING SUMMARY</p>
+    <div class="header-section">
+        <h1 class="company-name">NRV DENIM PRIVATE LIMITED</h1>
+        <p class="report-title">DAILY WASTE & RECYCLING SUMMARY REPORT</p>
     </div>
 
-    <div class="controls-row">
+    <div class="controls no-print">
         <div class="form-group">
-            <label>Select Month</label>
-            <input type="month" id="dailyReportMonth" onchange="loadDailyReport()">
+            <label>Reporting Month</label>
+            <input type="month" id="reportMonth" onchange="loadReport()">
         </div>
-        
-        <div class="button-group">
-            <button class="action-btn btn-refresh" onclick="loadDailyReport()">🔄 Refresh Data</button>
-            <button class="action-btn btn-excel" onclick="exportDailyToExcel()">📊 Export Excel</button>
+        <div class="btn-group">
+            <button class="action-btn btn-refresh" onclick="loadReport()">🔄 Refresh</button>
+            <button class="action-btn btn-excel" onclick="exportToExcel()">📊 Excel</button>
             <button class="action-btn btn-print" onclick="window.print()">🖨️ Print Report</button>
         </div>
     </div>
 
-    <table id="dailyReportTable">
-        <thead>
-            <tr>
-                <th rowspan="2">Date</th>
-                <th colspan="3" style="background: #27ae60;">Raw Waste</th>
-                <th colspan="3" style="background: #e67e22;">Issue Raw Waste</th>
-                <th colspan="3" style="background: #8e44ad;">Prod. Waste Recycle Plant</th>
-                <th colspan="2" style="background: #f39c12;">Issue & Sale Recycle Fiber</th>
-                <th colspan="3" style="background: #c0392b;">Stock Raw Waste (Total)</th>
-                <th colspan="2" style="background: #16a085;">Stock Recycled (Total)</th>
-            </tr>
-            <tr>
-                <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
-                <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
-                <th>Recycled Fiber</th><th>Gutter Waste</th><th>Recovery %</th>
-                <th>Issue Recycled</th><th>Sale Gutter</th>
-                <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
-                <th>Recycled Fiber</th><th>Gutter Waste</th>
-            </tr>
-        </thead>
-        <tbody id="dailyReportBody">
-            <tr><td colspan="17">Initializing...</td></tr>
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+        <table id="mainReportTable">
+            <thead>
+                <tr>
+                    <th rowspan="2">Date</th>
+                    <th colspan="3" class="bg-raw" style="background: #27ae60;">Raw Waste Receipt</th>
+                    <th colspan="3" class="bg-iss" style="background: #e67e22;">Issue Raw Waste</th>
+                    <th colspan="3" class="bg-prd" style="background: #8e44ad;">Prod. Waste Recycle Plant</th>
+                    <th colspan="2" class="bg-rec" style="background: #f39c12;">Issue & Sale Recycle Fiber</th>
+                    <th colspan="3" class="bg-stk-raw" style="background: #c0392b;">Stock Raw Waste (Total)</th>
+                    <th colspan="2" class="bg-stk-rec" style="background: #16a085;">Stock Recycled (Total)</th>
+                </tr>
+                <tr>
+                    <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
+                    <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
+                    <th>Recycled Fiber</th><th>Gutter Waste</th><th>Recovery %</th>
+                    <th>Issue Recycled</th><th>Sale Gutter</th>
+                    <th>Market Purchase</th><th>Plant Waste</th><th>Total</th>
+                    <th>Recycled Fiber</th><th>Gutter Waste</th>
+                </tr>
+            </thead>
+            <tbody id="reportDataBody">
+                <tr><td colspan="17">Loading cumulative data...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
+    // Using your main script API URL
     const API_URL = 'https://script.google.com/macros/s/AKfycbxTO3fc8hh7PBrLJI95YECv-H67eWbmzbyB7TDcgLRXGGg0ua-zzWVLMKKwe5jZS63iyw/exec';
 
-    // Initialize report on page load
     function initReport() {
-        const now = new Date();
-        const currentMonth = now.toISOString().slice(0, 7);
-        document.getElementById('dailyReportMonth').value = currentMonth;
-        loadDailyReport();
+        const today = new Date().toISOString().slice(0, 7);
+        document.getElementById('reportMonth').value = today;
+        loadReport();
     }
 
-    async function loadDailyReport() {
-        const tbody = document.getElementById('dailyReportBody');
-        const monthString = document.getElementById('dailyReportMonth').value;
-        if(!monthString) return;
+    async function loadReport() {
+        const tbody = document.getElementById('reportDataBody');
+        const selectedMonth = document.getElementById('reportMonth').value;
+        if(!selectedMonth) return;
         
-        tbody.innerHTML = "<tr><td colspan='17' style='padding:20px; font-size:14px;'>Loading data and calculating cumulative totals...</td></tr>";
+        tbody.innerHTML = "<tr><td colspan='17'>Syncing with server and calculating balances...</td></tr>";
 
         try {
-            const [rR, rI] = await Promise.all([
-                fetch(`${API_URL}?Department=RAW_MATERIAL_REC&t=${Date.now()}`), 
+            const [respRec, respIss] = await Promise.all([
+                fetch(`${API_URL}?Department=RAW_MATERIAL_REC&t=${Date.now()}`),
                 fetch(`${API_URL}?Department=RAW_MATERIAL_ISSUE&t=${Date.now()}`)
             ]);
             
-            const recs = await rR.json(); 
-            const iss = await rI.json();
+            const rawRec = await respRec.json();
+            const rawIss = await respIss.json();
 
-            let dailyMap = {};
-            const initDay = (d) => {
-                if(!dailyMap[d]) dailyMap[d] = { mr_mkt:0, mr_plt:0, mi_mkt:0, mi_plt:0, prd_fib:0, prd_gut:0, iss_fib:0, sale_gut:0 };
+            let dailyData = {};
+            const ensureDate = (d) => {
+                if(!dailyData[d]) dailyData[d] = { mr_mkt:0, mr_plt:0, mi_mkt:0, mi_plt:0, prd_fib:0, prd_gut:0, iss_fib:0, sale_gut:0 };
             };
 
-            // Receipts logic
-            recs.forEach(r => {
+            // Calculate daily totals for all activities
+            rawRec.forEach(r => {
+                if(!r["Date"]) return;
                 const d = r["Date"].split('T')[0];
-                initDay(d);
-                if(r["Category"] === "Market Purchase Waste") dailyMap[d].mr_mkt += parseFloat(r["Qty (KG)"]||0);
-                if(r["Category"] === "Plant Waste Production") dailyMap[d].mr_plt += parseFloat(r["Qty (KG)"]||0);
-                if(r["Category"] === "Waste Recycling Plant") {
-                    const itemDesc = (r["Item Description"] || "").trim().toUpperCase();
-                    if(itemDesc === "RECYCLED FIBER") dailyMap[d].prd_fib += parseFloat(r["Qty (KG)"]||0);
-                    else if (itemDesc === "GUTTER WASTE") dailyMap[d].prd_gut += parseFloat(r["Qty (KG)"]||0);
+                ensureDate(d);
+                const qty = parseFloat(r["Qty (KG)"] || 0);
+                const cat = (r["Category"] || "").trim();
+                const item = (r["Item Description"] || "").trim().toUpperCase();
+
+                if(cat === "Market Purchase Waste") dailyData[d].mr_mkt += qty;
+                else if(cat === "Plant Waste Production") dailyData[d].mr_plt += qty;
+                else if(cat === "Waste Recycling Plant") {
+                    if(item === "RECYCLED FIBER") dailyData[d].prd_fib += qty;
+                    else if(item === "GUTTER WASTE") dailyData[d].prd_gut += qty;
                 }
             });
 
-            // Issues logic
-            iss.forEach(i => {
+            rawIss.forEach(i => {
+                if(!i["Date"]) return;
                 const d = i["Date"].split('T')[0];
-                initDay(d);
-                if(i["Category"] === "Market Purchase Waste") dailyMap[d].mi_mkt += parseFloat(i["Qty (KG)"]||0);
-                if(i["Category"] === "Plant Waste Production") dailyMap[d].mi_plt += parseFloat(i["Qty (KG)"]||0);
-                if(i["Category"] === "Waste Recycling Plant") {
-                    const itemDesc = (i["Item Description"] || "").trim().toUpperCase();
-                    if(itemDesc === "RECYCLED FIBER") dailyMap[d].iss_fib += parseFloat(i["Qty (KG)"]||0);
-                    else if (itemDesc === "GUTTER WASTE") dailyMap[d].sale_gut += parseFloat(i["Qty (KG)"]||0);
+                ensureDate(d);
+                const qty = parseFloat(i["Qty (KG)"] || 0);
+                const cat = (i["Category"] || "").trim();
+                const item = (i["Item Description"] || "").trim().toUpperCase();
+
+                if(cat === "Market Purchase Waste") dailyData[d].mi_mkt += qty;
+                else if(cat === "Plant Waste Production") dailyData[d].mi_plt += qty;
+                else if(cat === "Waste Recycling Plant") {
+                    if(item === "RECYCLED FIBER") dailyData[d].iss_fib += qty;
+                    else if(item === "GUTTER WASTE") dailyData[d].sale_gut += qty;
                 }
             });
 
             tbody.innerHTML = "";
-            let runningMkt = 0, runningPlt = 0, runningFib = 0, runningGut = 0;
-            const sortedDates = Object.keys(dailyMap).sort();
+            let runMkt = 0, runPlt = 0, runFib = 0, runGut = 0;
+            const allDates = Object.keys(dailyData).sort();
 
-            sortedDates.forEach(date => {
-                const row = dailyMap[date];
+            allDates.forEach(date => {
+                const day = dailyData[date];
                 
-                // Cumulative logic (Stock)
-                runningMkt += (row.mr_mkt - row.mi_mkt);
-                runningPlt += (row.mr_plt - row.mi_plt);
-                runningFib += (row.prd_fib - row.iss_fib);
-                runningGut += (row.prd_gut - row.sale_gut);
+                // Cumulative logic: Add current day receipts, subtract current day issues
+                runMkt += (day.mr_mkt - day.mi_mkt);
+                runPlt += (day.mr_plt - day.mi_plt);
+                runFib += (day.prd_fib - day.iss_fib);
+                runGut += (day.prd_gut - day.sale_gut);
 
-                if(date.startsWith(monthString)) {
-                    const totIss = row.mi_mkt + row.mi_plt;
-                    // Formula: Recycled Fiber / Total Issue Raw Waste * 100
-                    const recovery = totIss > 0 ? ((row.prd_fib / totIss) * 100).toFixed(2) : "0.00";
+                // Only display the rows for the user-selected month
+                if(date.startsWith(selectedMonth)) {
+                    const totalRawRec = day.mr_mkt + day.mr_plt;
+                    const totalRawIss = day.mi_mkt + day.mi_plt;
+                    const recovery = totalRawIss > 0 ? ((day.prd_fib / totalRawIss) * 100).toFixed(2) : "0.00";
                     
                     tbody.innerHTML += `<tr>
                         <td>${date}</td>
-                        <td>${row.mr_mkt.toFixed(0)}</td><td>${row.mr_plt.toFixed(0)}</td><td><b>${(row.mr_mkt+row.mr_plt).toFixed(0)}</b></td>
-                        <td>${row.mi_mkt.toFixed(0)}</td><td>${row.mi_plt.toFixed(0)}</td><td><b>${totIss.toFixed(0)}</b></td>
-                        <td>${row.prd_fib.toFixed(0)}</td><td>${row.prd_gut.toFixed(0)}</td><td>${recovery}%</td>
-                        <td>${row.iss_fib.toFixed(0)}</td><td>${row.sale_gut.toFixed(0)}</td>
-                        <td style="background:#fdf2f2">${runningMkt.toFixed(0)}</td>
-                        <td style="background:#fdf2f2">${runningPlt.toFixed(0)}</td>
-                        <td style="background:#f9ebea"><b>${(runningMkt + runningPlt).toFixed(0)}</b></td>
-                        <td style="background:#f4fefc">${runningFib.toFixed(0)}</td>
-                        <td style="background:#f4fefc">${runningGut.toFixed(0)}</td>
+                        <td>${day.mr_mkt.toFixed(0)}</td><td>${day.mr_plt.toFixed(0)}</td><td style="background:#e8f5e9"><b>${totalRawRec.toFixed(0)}</b></td>
+                        <td>${day.mi_mkt.toFixed(0)}</td><td>${day.mi_plt.toFixed(0)}</td><td style="background:#fff3e0"><b>${totalRawIss.toFixed(0)}</b></td>
+                        <td>${day.prd_fib.toFixed(0)}</td><td>${day.prd_gut.toFixed(0)}</td><td>${recovery}%</td>
+                        <td>${day.iss_fib.toFixed(0)}</td><td>${day.sale_gut.toFixed(0)}</td>
+                        <td style="background:#ffebee">${runMkt.toFixed(0)}</td>
+                        <td style="background:#ffebee">${runPlt.toFixed(0)}</td>
+                        <td style="background:#f9dcdc" class="cumulative-col">${(runMkt + runPlt).toFixed(0)}</td>
+                        <td style="background:#e0f2f1">${runFib.toFixed(0)}</td>
+                        <td style="background:#e0f2f1">${runGut.toFixed(0)}</td>
                     </tr>`;
                 }
             });
-            if(tbody.innerHTML === "") tbody.innerHTML = "<tr><td colspan='17'>No data found for this month.</td></tr>";
-        } catch(e) { 
-            tbody.innerHTML = "<tr><td colspan='17' style='color:red;'>Error fetching data. Please try refreshing.</td></tr>"; 
+            
+            if(tbody.innerHTML === "") tbody.innerHTML = "<tr><td colspan='17'>No data found for this period.</td></tr>";
+
+        } catch(e) {
+            tbody.innerHTML = "<tr><td colspan='17' style='color:red;'>Failed to load data. Please check connection.</td></tr>";
         }
     }
 
-    function exportDailyToExcel() { 
-        const month = document.getElementById('dailyReportMonth').value;
-        XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById("dailyReportTable")), `NRV_Stock_Report_${month}.xlsx`); 
+    function exportToExcel() {
+        const name = "Stock_Report_" + document.getElementById('reportMonth').value;
+        XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById("mainReportTable")), `${name}.xlsx`);
     }
 </script>
 
