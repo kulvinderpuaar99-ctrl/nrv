@@ -70,7 +70,7 @@
         }
         .filter-group { display: flex; flex-direction: column; gap: 5px; }
         .filter-group label { font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase; }
-        input[type="month"], input[type="text"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 5px; outline: none; }
+        input[type="month"], input[type="date"], input[type="text"], select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: white; font-family: inherit;}
         
         .btn { padding: 10px 18px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .btn-refresh { background: #34495e; color: white; }
@@ -131,12 +131,24 @@
 <div class="container">
     <div class="control-panel">
         <div class="filter-group">
+            <label>Period Type</label>
+            <select id="periodType" onchange="togglePeriod(); loadBalanceStock()">
+                <option value="month">By Month</option>
+                <option value="date">Specific Date</option>
+            </select>
+        </div>
+        <div class="filter-group" id="monthFilterGroup">
             <label>Month</label>
             <input type="month" id="reportMonth" onchange="loadBalanceStock()">
         </div>
+        <div class="filter-group" id="dateFilterGroup" style="display: none;">
+            <label>Date</label>
+            <input type="date" id="reportDate" onchange="loadBalanceStock()">
+        </div>
+        
         <div class="filter-group">
             <label>Search</label>
-            <input type="text" id="stockFilter" placeholder="Filter Items..." onkeyup="filterStockTable()">
+            <input type="text" id="stockFilter" placeholder="Filter Category or Item..." onkeyup="filterStockTable()">
         </div>
         
         <button class="btn btn-refresh" onclick="loadBalanceStock()">
@@ -179,21 +191,39 @@
     let globalStockMap = {};
 
     window.onload = () => { 
-        document.getElementById('reportMonth').value = new Date().toISOString().slice(0, 7); 
+        const today = new Date();
+        document.getElementById('reportMonth').value = today.toISOString().slice(0, 7); 
+        document.getElementById('reportDate').value = today.toISOString().split('T')[0];
+        togglePeriod();
         loadBalanceStock();
     };
+
+    function togglePeriod() {
+        const type = document.getElementById('periodType').value;
+        document.getElementById('monthFilterGroup').style.display = type === 'month' ? 'flex' : 'none';
+        document.getElementById('dateFilterGroup').style.display = type === 'date' ? 'flex' : 'none';
+    }
 
     function updateView() { renderTable(); }
 
     async function loadBalanceStock() {
         const icon = document.getElementById('refreshIcon');
         const tbody = document.getElementById('stockTableBody');
-        const month = document.getElementById('reportMonth').value;
         
-        // Set Month Name for Print Preview
-        const dateObj = new Date(month + "-01");
-        const monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
-        document.getElementById('printMonthDisplay').innerText = "STOCK REPORT FOR: " + monthName.toUpperCase();
+        const periodType = document.getElementById('periodType').value;
+        const targetMonth = document.getElementById('reportMonth').value;
+        const targetDate = document.getElementById('reportDate').value;
+        
+        // Set Header Name for Print Preview
+        if (periodType === 'month') {
+            const dateObj = new Date(targetMonth + "-01");
+            const monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+            document.getElementById('printMonthDisplay').innerText = "STOCK REPORT FOR: " + monthName.toUpperCase();
+        } else {
+            if(!targetDate) return; 
+            const dateObj = new Date(targetDate);
+            document.getElementById('printMonthDisplay').innerText = "STOCK REPORT FOR DATE: " + dateObj.toLocaleDateString();
+        }
 
         icon.classList.add('fa-spin');
         
@@ -211,6 +241,11 @@
                     if (!item["Date"]) return;
                     const dateVal = new Date(item["Date"]);
                     const itemMonth = `${dateVal.getFullYear()}-${String(dateVal.getMonth() + 1).padStart(2, '0')}`;
+                    
+                    // Format item date as YYYY-MM-DD for accurate comparison
+                    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+                    const itemDateStr = (new Date(dateVal - tzOffset)).toISOString().split('T')[0];
+
                     const k = (item["Category"]||"N/A").trim().toUpperCase() + "|" + (item["Item Description"]||"").trim().toUpperCase();
                     
                     if(!globalStockMap[k]) {
@@ -222,18 +257,29 @@
                     
                     const q = parseFloat(item["Qty (KG)"]||0), b = parseFloat(item["Bales"]||0), a = parseFloat(item["Total Amount"]||0);
                     
-                    if(type === 'i' && item["Issuing To (Dept)"] && itemMonth === month) {
+                    let isCurrentPeriod = false;
+                    let isPastPeriod = false;
+
+                    if (periodType === 'month') {
+                        isCurrentPeriod = (itemMonth === targetMonth);
+                        isPastPeriod = (itemMonth < targetMonth);
+                    } else {
+                        isCurrentPeriod = (itemDateStr === targetDate);
+                        isPastPeriod = (itemDateStr < targetDate);
+                    }
+
+                    if(type === 'i' && item["Issuing To (Dept)"] && isCurrentPeriod) {
                         const dpt = item["Issuing To (Dept)"].trim();
                         if(!globalStockMap[k].deptIssues[dpt]) globalStockMap[k].deptIssues[dpt] = { kg: 0, bal: 0 };
                         globalStockMap[k].deptIssues[dpt].kg += q;
                         globalStockMap[k].deptIssues[dpt].bal += b;
                     }
 
-                    if(itemMonth < month) { 
+                    if(isPastPeriod) { 
                         globalStockMap[k].opKg += (type==='r'?q:-q); 
                         globalStockMap[k].opBal += (type==='r'?b:-b); 
                         globalStockMap[k].opAmt += (type==='r'?a:-a); 
-                    } else if(itemMonth === month) { 
+                    } else if(isCurrentPeriod) { 
                         if(type==='r'){ globalStockMap[k].reKg+=q; globalStockMap[k].reBal+=b; globalStockMap[k].reAmt+=a; } 
                         else { globalStockMap[k].isKg+=q; globalStockMap[k].isBal+=b; globalStockMap[k].isAmt+=a; } 
                     }
@@ -248,6 +294,7 @@
         const tbody = document.getElementById('stockTableBody');
         const sD = document.getElementById('viewDept').checked;
         const sK = document.getElementById('viewKg').checked, sB = document.getElementById('viewBales').checked, sA = document.getElementById('viewAmt').checked, hZ = document.getElementById('hideZero').checked;
+        const filterVal = document.getElementById("stockFilter").value.toUpperCase();
         
         document.getElementById('thDept').style.display = sD ? '' : 'none';
         tbody.innerHTML = "";
@@ -257,8 +304,13 @@
         for(let k in globalStockMap) {
             let e = globalStockMap[k];
             let ck = e.opKg+e.reKg-e.isKg, cb = e.opBal+e.reBal-e.isBal, ca = e.opAmt+e.reAmt-e.isAmt;
+            
             if(hZ && ck <= 0) continue;
             
+            // Apply text filter to limit rendering AND total calculations (ONLY Category and Item now)
+            let searchString = (e.category + " " + e.item).toUpperCase();
+            if (filterVal && !searchString.includes(filterVal)) continue;
+
             t.ok+=e.opKg; t.ob+=e.opBal; t.oa+=e.opAmt;
             t.rk+=e.reKg; t.rb+=e.reBal; t.ra+=e.reAmt;
             t.ik+=e.isKg; t.ib+=e.isBal; t.ia+=e.isAmt;
@@ -320,10 +372,19 @@
         ];
         data.push(headers);
 
+        const filterVal = document.getElementById("stockFilter").value.toUpperCase();
+        const hZ = document.getElementById('hideZero').checked;
+
         for(let k in globalStockMap) {
             let e = globalStockMap[k];
             let ck = e.opKg+e.reKg-e.isKg, cb = e.opBal+e.reBal-e.isBal, ca = e.opAmt+e.reAmt-e.isAmt;
             
+            if(hZ && ck <= 0) continue;
+            
+            // Apply text filter to excel export (ONLY Category and Item now)
+            let searchString = (e.category + " " + e.item).toUpperCase();
+            if (filterVal && !searchString.includes(filterVal)) continue;
+
             let deptTxt = Object.keys(e.deptIssues).length > 0 
                 ? Object.entries(e.deptIssues).map(([d, v]) => `${d}: ${v.kg}KG`).join(" | ") 
                 : "No Issues";
@@ -345,12 +406,15 @@
         // Professional Formatting for Excel Columns
         ws['!cols'] = [{wch:15}, {wch:30}, {wch:35}, {wch:12}, {wch:12}, {wch:15}, {wch:12}, {wch:12}, {wch:15}, {wch:12}, {wch:12}, {wch:15}, {wch:12}, {wch:12}, {wch:15}, {wch:10}];
         
-        XLSX.writeFile(wb, `NRV_Stock_Report_${document.getElementById('reportMonth').value}.xlsx`);
+        // Dynamic file naming based on period type
+        const pType = document.getElementById('periodType').value;
+        const dStr = pType === 'month' ? document.getElementById('reportMonth').value : document.getElementById('reportDate').value;
+        XLSX.writeFile(wb, `NRV_Stock_Report_${dStr}.xlsx`);
     }
 
     function filterStockTable() { 
-        let val = document.getElementById("stockFilter").value.toUpperCase(); 
-        Array.from(document.getElementById("stockTableBody").rows).forEach(r => r.style.display = r.textContent.toUpperCase().includes(val) ? "" : "none"); 
+        // Triggering full re-render so totals recalculate based on the filter automatically
+        renderTable(); 
     }
 </script>
 </body>
